@@ -95,3 +95,13 @@ async def test_unavailable_tts_drains_bounded_sentence_queue(tmp_path):
     await asyncio.wait_for(worker, 1)
     assert any(event.get("code") == "tts_unavailable" for event in socket.json)
     database.close()
+
+
+def test_suppresses_common_short_whisper_hallucinations_and_duplicates(tmp_path):
+    session, _, database = make_session(tmp_path)
+    assert session._suppress_final_reason("Thank you.") == "suppressed_phrase"
+    assert session._suppress_final_reason("Actual question?") is None
+    session.last_final_text = "actual question?"
+    session.last_final_at = time.monotonic()
+    assert session._suppress_final_reason("Actual question?") == "duplicate_final"
+    database.close()

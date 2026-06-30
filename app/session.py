@@ -97,6 +97,8 @@ class AssistantSession:
         self.screen_metadata: dict[int, ScreenMetadata] = {}
         self.screen_event = asyncio.Event()
         self.background: set[asyncio.Task] = set()
+        self.last_final_text = ""
+        self.last_final_at = 0.0
 
     async def send_json(self, payload: dict) -> None:
         async with self.send_lock:
@@ -308,8 +310,26 @@ class AssistantSession:
                     )
                 elif kind == "final":
                     text = str(event.get("text", "")).strip()
-                    await self.send_json({"type": "transcript.final", "text": text})
-                    if text:
+                    suppressed_reason = self._suppress_final_reason(text)
+                    if suppressed_reason:
+                        await self.conversation_log.write(
+                            "whisper.suppressed",
+                            profile_id=self.profile_id,
+                            text=text,
+                            reason=suppressed_reason,
+                        )
+                        await self.send_json(
+                            {
+                                "type": "transcript.suppressed",
+                                "text": text,
+                                "reason": suppressed_reason,
+                            }
+                        )
+                    else:
+                        await self.send_json({"type": "transcript.final", "text": text})
+                    if text and not suppressed_reason:
+                        self.last_final_text = text.casefold()
+                        self.last_final_at = time.monotonic()
                         await self.conversation_log.write(
                             "whisper.final",
                             profile_id=self.profile_id,
@@ -333,6 +353,19 @@ class AssistantSession:
                 await self.send_json(
                     {"type": "error", "code": "whisper_unavailable", "message": "Whisper disconnected"}
                 )
+
+    def _suppress_final_reason(self, text: str) -> str | None:
+        normalized = " ".join(text.casefold().split())
+        if not normalized:
+            return "empty"
+        if normalized in self.settings.stt_suppressed_finals:
+            return "suppressed_phrase"
+        if (
+            normalized == self.last_final_text
+            and time.monotonic() - self.last_final_at <= self.settings.stt_duplicate_window_seconds
+        ):
+            return "duplicate_final"
+        return None
 
     async def _start_turn(self, transcript: str) -> None:
         if self.turn_task and not self.turn_task.done():

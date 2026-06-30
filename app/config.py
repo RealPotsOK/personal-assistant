@@ -14,6 +14,21 @@ def _integer(name: str, default: int, minimum: int = 0) -> int:
     return value
 
 
+def _float(name: str, default: float, minimum: float = 0) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError as error:
+        raise ValueError(f"{name} must be a number") from error
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return value
+
+
+def _csv(name: str, default: str) -> tuple[str, ...]:
+    value = os.getenv(name, default)
+    return tuple(item.strip().casefold() for item in value.split("|") if item.strip())
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     ai_api_key: str = os.getenv("AI_API_KEY", "")
@@ -46,6 +61,11 @@ class Settings:
     }
     conversation_log_path: str = os.getenv("CONVERSATION_LOG_PATH", "/logs/conversation.log")
     conversation_log_max_bytes: int = _integer("CONVERSATION_LOG_MAX_BYTES", 10 * 1024 * 1024, 1024)
+    stt_duplicate_window_seconds: float = _float("STT_DUPLICATE_WINDOW_SECONDS", 2.0, 0)
+    stt_suppressed_finals: tuple[str, ...] = _csv(
+        "STT_SUPPRESSED_FINALS",
+        "thank you.|thank you|thanks for watching.|thanks for watching|you.",
+    )
 
     def validate(self) -> None:
         if len(self.ai_api_key) < 16:

@@ -2,6 +2,7 @@ using PersonalAssistant.Windows.Audio;
 using PersonalAssistant.Windows.Config;
 using PersonalAssistant.Windows.Screen;
 using PersonalAssistant.Windows.Session;
+using PersonalAssistant.Windows.Setup;
 
 namespace PersonalAssistant.Windows.UI;
 
@@ -14,6 +15,8 @@ public sealed class TrayApplicationContext : ApplicationContext
     private AssistantSessionClient? _session;
     private MicrophoneStreamer? _microphone;
     private PcmPlayback? _playback;
+    private ToolStripMenuItem? _connectItem;
+    private ToolStripMenuItem? _muteItem;
     private bool _muted;
 
     public TrayApplicationContext()
@@ -25,6 +28,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildMenu(),
         };
+        _tray.DoubleClick += (_, _) => OpenSettings();
         Application.ApplicationExit += (_, _) => Cleanup();
         _ = StartAsync();
     }
@@ -32,13 +36,16 @@ public sealed class TrayApplicationContext : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Connect", null, async (_, _) => await ConnectAsync());
-        menu.Items.Add("Disconnect", null, async (_, _) => await DisconnectAsync());
-        menu.Items.Add("Mute / Unmute", null, (_, _) => ToggleMute());
+        _connectItem = new ToolStripMenuItem("Connect", null, async (_, _) => await ToggleConnectionAsync());
+        _muteItem = new ToolStripMenuItem("Mute", null, (_, _) => ToggleMute());
+        menu.Items.Add(_connectItem);
+        menu.Items.Add(_muteItem);
         menu.Items.Add("Send Screen Context", null, async (_, _) => await SendScreenAsync(true));
+        menu.Items.Add("Upload / Replace Voice...", null, async (_, _) => await UploadVoiceAsync());
         menu.Items.Add("Settings", null, (_, _) => OpenSettings());
         menu.Items.Add("Reset Pairing", null, (_, _) => ResetPairing());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
+        RefreshMenuLabels();
         return menu;
     }
 
@@ -56,6 +63,19 @@ public sealed class TrayApplicationContext : ApplicationContext
             _config = setup.Result;
         }
         await ConnectAsync();
+    }
+
+    private async Task ToggleConnectionAsync()
+    {
+        if (_session?.IsConnected == true)
+        {
+            await DisconnectAsync();
+        }
+        else
+        {
+            await ConnectAsync();
+        }
+        RefreshMenuLabels();
     }
 
     private async Task ConnectAsync()
@@ -83,6 +103,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             _microphone.Start(_config.InputDeviceNumber);
         }
+        RefreshMenuLabels();
     }
 
     private async Task DisconnectAsync()
@@ -97,6 +118,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             await _session.DisposeAsync();
             _session = null;
         }
+        RefreshMenuLabels();
     }
 
     private void ToggleMute()
@@ -111,6 +133,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             _microphone ??= new MicrophoneStreamer(_session, _shutdown.Token);
             _microphone.Start(_config.InputDeviceNumber);
         }
+        RefreshMenuLabels();
     }
 
     private async Task SendScreenAsync(bool explicitRequest)
@@ -131,6 +154,51 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private async Task UploadVoiceAsync()
+    {
+        if (_config is null)
+        {
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "Audio reference (*.wav;*.mp3)|*.wav;*.mp3",
+            Title = "Choose XTTS voice reference",
+        };
+        if (dialog.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            _tray.ShowBalloonTip(2000, "Uploading voice", "Caching XTTS voice reference...", ToolTipIcon.Info);
+            var voiceId = await new PairingClient().UploadVoiceReferenceAsync(
+                _config,
+                dialog.FileName,
+                _config.DeviceName,
+                _shutdown.Token);
+            if (string.IsNullOrWhiteSpace(voiceId))
+            {
+                _tray.ShowBalloonTip(4000, "Voice upload failed", "XTTS did not return a voice_id.", ToolTipIcon.Warning);
+                return;
+            }
+
+            _config.VoiceId = voiceId;
+            _store.Save(_config);
+            _tray.ShowBalloonTip(3000, "Voice ready", $"Saved {voiceId}. Reconnecting with voice enabled.", ToolTipIcon.Info);
+            if (_session?.IsConnected == true)
+            {
+                await ConnectAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _tray.ShowBalloonTip(5000, "Voice upload failed", ex.Message, ToolTipIcon.Error);
+        }
+    }
+
     private void OpenSettings()
     {
         if (_config is null)
@@ -142,6 +210,18 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (settings.ShowDialog() == DialogResult.OK)
         {
             _store.Save(_config);
+        }
+    }
+
+    private void RefreshMenuLabels()
+    {
+        if (_connectItem is not null)
+        {
+            _connectItem.Text = _session?.IsConnected == true ? "Disconnect" : "Connect";
+        }
+        if (_muteItem is not null)
+        {
+            _muteItem.Text = _muted ? "Unmute" : "Mute";
         }
     }
 
