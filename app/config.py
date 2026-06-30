@@ -64,7 +64,7 @@ class Settings:
     stt_duplicate_window_seconds: float = _float("STT_DUPLICATE_WINDOW_SECONDS", 2.0, 0)
     stt_suppressed_finals: tuple[str, ...] = _csv(
         "STT_SUPPRESSED_FINALS",
-        "thank you.|thank you|thanks for watching.|thanks for watching|you.",
+        "thank you.|thank you|thanks for watching.|thanks for watching|you.|you",
     )
 
     def validate(self) -> None:

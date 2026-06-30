@@ -32,3 +32,4 @@ class VoiceMetadata(BaseModel):
     model: str
     created_at: str
     reference_seconds: float
+    warnings: list[dict] = Field(default_factory=list)

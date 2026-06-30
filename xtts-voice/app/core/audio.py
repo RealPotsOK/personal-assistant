@@ -19,6 +19,7 @@ class NormalizedReference:
     directory: tempfile.TemporaryDirectory
     path: Path
     seconds: float
+    warnings: list[dict[str, object]]
 
     def close(self) -> None:
         self.directory.cleanup()
@@ -69,14 +70,25 @@ async def normalize_reference(upload: UploadFile, settings: Settings) -> Normali
             raise APIError("reference_audio could not be decoded", 400, "invalid_reference_audio")
         with wave.open(str(target), "rb") as audio:
             seconds = audio.getnframes() / audio.getframerate()
-        if seconds < settings.min_reference_seconds or seconds > settings.max_reference_seconds:
-            raise APIError(
-                f"reference_audio must be between {settings.min_reference_seconds} and "
-                f"{settings.max_reference_seconds} seconds",
-                400,
-                "invalid_reference_duration",
+        warnings: list[dict[str, object]] = []
+        if (
+            seconds < settings.recommended_reference_min_seconds
+            or seconds > settings.recommended_reference_max_seconds
+        ):
+            warnings.append(
+                {
+                    "code": "reference_duration_outside_recommended_range",
+                    "message": (
+                        "Audio file is outside the recommended length of "
+                        f"{settings.recommended_reference_min_seconds}-"
+                        f"{settings.recommended_reference_max_seconds} seconds."
+                    ),
+                    "reference_seconds": round(seconds, 3),
+                    "recommended_min_seconds": settings.recommended_reference_min_seconds,
+                    "recommended_max_seconds": settings.recommended_reference_max_seconds,
+                }
             )
-        return NormalizedReference(directory, target, seconds)
+        return NormalizedReference(directory, target, seconds, warnings)
     except Exception:
         directory.cleanup()
         raise

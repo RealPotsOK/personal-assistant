@@ -106,12 +106,15 @@ def create_router(settings: Settings, engine: InferenceEngine, store: VoiceStore
         reference = await normalize_reference(reference_audio, settings)
         try:
             conditioning, embedding = await engine.condition(reference.path)
-            return store.save(
+            metadata = store.save(
                 conditioning,
                 embedding,
                 name=name,
                 reference_seconds=reference.seconds,
             )
+            if reference.warnings:
+                metadata["warnings"] = reference.warnings
+            return metadata
         finally:
             reference.close()
 

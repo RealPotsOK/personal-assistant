@@ -81,6 +81,16 @@ def client(max_text_chars=5000):
     return TestClient(app)
 
 
+def wav_bytes(seconds: int, sample_rate: int = 24_000) -> bytes:
+    audio = io.BytesIO()
+    with wave.open(audio, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(b"\x00\x00" * (sample_rate * seconds))
+    return audio.getvalue()
+
+
 def test_auth_is_required():
     with client() as api:
         response = api.post("/tts", json={"text": "Hello", "voice_id": "voice_test"})
@@ -121,21 +131,46 @@ def test_openai_alias_validation_and_text_limit():
 
 
 def test_reference_upload_is_normalized_for_voice_cache():
-    audio = io.BytesIO()
-    with wave.open(audio, "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(24_000)
-        wav.writeframes(b"\x00\x00" * (24_000 * 4))
     with client() as api:
         response = api.post(
             "/voices/cache",
             headers=AUTH,
-            files={"reference_audio": ("voice.wav", audio.getvalue(), "audio/wav")},
+            files={"reference_audio": ("voice.wav", wav_bytes(24), "audio/wav")},
             data={"name": "Test voice"},
         )
     assert response.status_code == 201
     assert response.json()["voice_id"] == "voice_test"
+    assert "warnings" not in response.json()
+
+
+def test_short_reference_upload_saves_with_duration_warning():
+    with client() as api:
+        response = api.post(
+            "/voices/cache",
+            headers=AUTH,
+            files={"reference_audio": ("voice.wav", wav_bytes(4), "audio/wav")},
+            data={"name": "Short voice"},
+        )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["voice_id"] == "voice_test"
+    assert payload["warnings"][0]["code"] == "reference_duration_outside_recommended_range"
+    assert payload["warnings"][0]["reference_seconds"] == 4.0
+
+
+def test_long_reference_upload_saves_with_duration_warning():
+    with client() as api:
+        response = api.post(
+            "/voices/cache",
+            headers=AUTH,
+            files={"reference_audio": ("voice.wav", wav_bytes(31), "audio/wav")},
+            data={"name": "Long voice"},
+        )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["voice_id"] == "voice_test"
+    assert payload["warnings"][0]["code"] == "reference_duration_outside_recommended_range"
+    assert payload["warnings"][0]["reference_seconds"] == 31.0
 
 
 def test_websocket_text_in_binary_audio_out():

@@ -174,20 +174,40 @@ public sealed class TrayApplicationContext : ApplicationContext
         try
         {
             _tray.ShowBalloonTip(2000, "Uploading voice", "Caching XTTS voice reference...", ToolTipIcon.Info);
-            var voiceId = await new PairingClient().UploadVoiceReferenceAsync(
+            var result = await new PairingClient().UploadVoiceReferenceAsync(
                 _config,
                 dialog.FileName,
                 _config.DeviceName,
                 _shutdown.Token);
-            if (string.IsNullOrWhiteSpace(voiceId))
+            if (!result.Success)
             {
-                _tray.ShowBalloonTip(4000, "Voice upload failed", "XTTS did not return a voice_id.", ToolTipIcon.Warning);
+                _tray.ShowBalloonTip(
+                    6000,
+                    "Voice upload failed",
+                    result.ErrorMessage ?? "The server rejected the voice reference.",
+                    ToolTipIcon.Warning);
                 return;
             }
 
-            _config.VoiceId = voiceId;
+            _config.VoiceId = result.VoiceId;
             _store.Save(_config);
-            _tray.ShowBalloonTip(3000, "Voice ready", $"Saved {voiceId}. Reconnecting with voice enabled.", ToolTipIcon.Info);
+            var warning = result.Warnings.FirstOrDefault(w => !string.IsNullOrWhiteSpace(w.Message));
+            if (warning is not null)
+            {
+                _tray.ShowBalloonTip(
+                    5000,
+                    "Voice cached with warning",
+                    "Voice cached, but sample is outside recommended 20–30 seconds.",
+                    ToolTipIcon.Warning);
+            }
+            else
+            {
+                _tray.ShowBalloonTip(
+                    3000,
+                    "Voice ready",
+                    $"Saved {result.VoiceId}. Reconnecting with voice enabled.",
+                    ToolTipIcon.Info);
+            }
             if (_session?.IsConnected == true)
             {
                 await ConnectAsync();

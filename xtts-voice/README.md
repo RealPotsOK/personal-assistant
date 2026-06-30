@@ -72,6 +72,10 @@ curl http://localhost:11112/voices/cache \
   -F 'name=Assistant voice'
 ```
 
+WAV and MP3 references are accepted when they decode successfully and fit the 20 MB upload limit.
+The recommended sample length is 20–30 seconds; shorter or longer samples still cache, and the JSON
+response includes a non-breaking `warnings` array with the measured `reference_seconds`.
+
 List or delete cached voices:
 
 ```bash

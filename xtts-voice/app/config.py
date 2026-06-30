@@ -26,6 +26,8 @@ class Settings:
     max_reference_bytes: int = _integer("MAX_REFERENCE_BYTES", 20 * 1024 * 1024, 1)
     min_reference_seconds: int = _integer("MIN_REFERENCE_SECONDS", 3, 1)
     max_reference_seconds: int = _integer("MAX_REFERENCE_SECONDS", 30, 1)
+    recommended_reference_min_seconds: int = _integer("RECOMMENDED_REFERENCE_MIN_SECONDS", 20, 1)
+    recommended_reference_max_seconds: int = _integer("RECOMMENDED_REFERENCE_MAX_SECONDS", 30, 1)
     max_queue: int = _integer("MAX_QUEUE", 8, 0)
     stream_chunk_size: int = _integer("STREAM_CHUNK_SIZE", 20, 1)
     max_segment_chars: int = _integer("MAX_SEGMENT_CHARS", 240, 40)
@@ -37,6 +39,11 @@ class Settings:
             raise ValueError("DEVICE must be cuda or cpu")
         if self.min_reference_seconds >= self.max_reference_seconds:
             raise ValueError("MIN_REFERENCE_SECONDS must be below MAX_REFERENCE_SECONDS")
+        if self.recommended_reference_min_seconds >= self.recommended_reference_max_seconds:
+            raise ValueError(
+                "RECOMMENDED_REFERENCE_MIN_SECONDS must be below "
+                "RECOMMENDED_REFERENCE_MAX_SECONDS"
+            )
 
 
 def load_settings() -> Settings:

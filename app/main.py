@@ -5,7 +5,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import (
@@ -97,6 +97,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         attempts.append(now)
         return False
 
+    def _xtts_failure_details(response: httpx.Response) -> tuple[str, str, dict[str, Any] | None]:
+        code = "xtts_voice_setup_failed"
+        message = response.text[:500] or "XTTS rejected the voice reference"
+        details: dict[str, Any] | None = None
+        try:
+            payload = response.json()
+        except ValueError:
+            return code, message, details
+        if not isinstance(payload, dict):
+            return code, message, details
+        details = payload
+        error = payload.get("error")
+        if isinstance(error, dict):
+            code = str(error.get("code") or error.get("type") or code)
+            message = str(error.get("message") or message)
+            return code, message, details
+        detail = payload.get("detail")
+        if isinstance(detail, dict):
+            code = str(detail.get("code") or code)
+            message = str(detail.get("message") or message)
+            return code, message, details
+        code = str(payload.get("code") or code)
+        message = str(payload.get("message") or detail or message)
+        return code, message, details
+
     @app.get("/live")
     async def live() -> dict:
         return {"status": "live"}
@@ -166,12 +191,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> JSONResponse:
         content_type = (reference_audio.content_type or "").lower()
         if content_type not in {"audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3"}:
+            await conversation_log.write(
+                "voice.setup.failed",
+                profile_id=auth.profile_id,
+                device_id=auth.device_id,
+                code="unsupported_audio_type",
+                message="Upload a WAV or MP3 reference",
+            )
             raise HTTPException(
                 status_code=400,
                 detail={"code": "unsupported_audio_type", "message": "Upload a WAV or MP3 reference"},
             )
         data = await reference_audio.read(config.max_voice_reference_bytes + 1)
         if len(data) > config.max_voice_reference_bytes:
+            await conversation_log.write(
+                "voice.setup.failed",
+                profile_id=auth.profile_id,
+                device_id=auth.device_id,
+                code="voice_reference_too_large",
+                message="Voice reference exceeds the configured limit",
+            )
             raise HTTPException(
                 status_code=413,
                 detail={
@@ -196,24 +235,55 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     data=form,
                 )
         except Exception as error:
+            message = (
+                "XTTS is unavailable; keep the reference for retry "
+                f"({type(error).__name__})"
+            )
+            await conversation_log.write(
+                "voice.setup.failed",
+                profile_id=auth.profile_id,
+                device_id=auth.device_id,
+                code="xtts_unavailable",
+                message=message,
+            )
             return JSONResponse(
                 {
                     "status": "unavailable",
                     "code": "xtts_unavailable",
-                    "message": f"XTTS is unavailable; keep the reference for retry ({type(error).__name__})",
+                    "message": message,
                 },
                 status_code=503,
             )
         if response.status_code >= 400:
+            code, message, details = _xtts_failure_details(response)
+            await conversation_log.write(
+                "voice.setup.failed",
+                profile_id=auth.profile_id,
+                device_id=auth.device_id,
+                status_code=response.status_code,
+                code=code,
+                message=message,
+            )
             return JSONResponse(
                 {
                     "status": "unavailable",
-                    "code": "xtts_voice_setup_failed",
-                    "message": response.text[:500],
+                    "code": code,
+                    "message": message,
+                    "xtts_status_code": response.status_code,
+                    "xtts_details": details,
                 },
                 status_code=response.status_code,
             )
         payload = response.json()
+        warnings = payload.get("warnings", []) if isinstance(payload, dict) else []
+        await conversation_log.write(
+            "voice.setup.succeeded",
+            profile_id=auth.profile_id,
+            device_id=auth.device_id,
+            voice_id=payload.get("voice_id") if isinstance(payload, dict) else None,
+            reference_seconds=payload.get("reference_seconds") if isinstance(payload, dict) else None,
+            warnings=warnings,
+        )
         return JSONResponse({"status": "ready", **payload}, status_code=201)
 
     @app.websocket("/session")

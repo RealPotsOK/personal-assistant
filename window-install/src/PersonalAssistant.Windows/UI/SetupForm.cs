@@ -86,18 +86,30 @@ public sealed class SetupForm : Form
             var pairing = new PairingClient();
             config = await pairing.PairAsync(config, CancellationToken.None);
 
-            var voiceId = await pairing.UploadVoiceReferenceAsync(
-                config,
-                _voicePath.Text.Trim(),
-                config.DeviceName,
-                CancellationToken.None);
-            config.VoiceId = voiceId;
+            VoiceUploadResult? voice = null;
+            var voicePath = _voicePath.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(voicePath))
+            {
+                voice = await pairing.UploadVoiceReferenceAsync(
+                    config,
+                    voicePath,
+                    config.DeviceName,
+                    CancellationToken.None);
+                if (voice.Success)
+                {
+                    config.VoiceId = voice.VoiceId;
+                }
+            }
 
             _store.Save(config);
             Result = config;
-            _status.Text = voiceId is null
-                ? "Paired. Voice setup will need retry after XTTS is available."
-                : $"Paired with voice {voiceId}.";
+            _status.Text = voice switch
+            {
+                null => "Paired. Upload a voice later from the tray menu.",
+                { Success: true, Warnings.Count: > 0 } => $"Paired with voice {voice.VoiceId}. Warning: {voice.Warnings[0].Message}",
+                { Success: true } => $"Paired with voice {voice.VoiceId}.",
+                _ => $"Paired, but voice setup failed: {voice.ErrorMessage}",
+            };
             DialogResult = DialogResult.OK;
             Close();
         }
