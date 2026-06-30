@@ -5,6 +5,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\PersonalAssistant"
+if (-not (Test-Path $Source)) {
+    throw "Published client folder was not found at '$Source'. Run .\scripts\publish-win-x64.ps1 first and make sure it succeeds."
+}
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Path (Join-Path $Source "*") -Destination $InstallDir -Recurse -Force
 

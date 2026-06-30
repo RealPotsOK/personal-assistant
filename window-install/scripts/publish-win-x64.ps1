@@ -11,4 +11,7 @@ dotnet publish "$Root\src\PersonalAssistant.Windows\PersonalAssistant.Windows.cs
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -o "$Root\publish\win-x64"
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed with exit code $LASTEXITCODE"
+}
 Write-Host "Published to $Root\publish\win-x64"

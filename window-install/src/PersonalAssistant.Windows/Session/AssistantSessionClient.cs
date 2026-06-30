@@ -128,7 +128,9 @@ public sealed class AssistantSessionClient : IAsyncDisposable
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await socket.ReceiveAsync(buffer.AsMemory(), cancellationToken);
+                    result = await socket.ReceiveAsync(
+                        new ArraySegment<byte>(buffer),
+                        cancellationToken);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         StatusChanged?.Invoke("disconnected");

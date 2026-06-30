@@ -1,5 +1,5 @@
 using System.Drawing.Imaging;
-using PersonalAssistant.Windows.Session;
+using AssistantNativeWindow = PersonalAssistant.Windows.Session.NativeWindow;
 
 namespace PersonalAssistant.Windows.Screen;
 
@@ -7,8 +7,10 @@ public static class ScreenCapture
 {
     public static byte[] CaptureActiveMonitorJpeg(long quality)
     {
-        var handle = NativeWindow.ForegroundWindowHandle;
-        var screen = handle == IntPtr.Zero ? System.Windows.Forms.Screen.PrimaryScreen : System.Windows.Forms.Screen.FromHandle(handle);
+        var handle = AssistantNativeWindow.ForegroundWindowHandle;
+        var screen = handle == IntPtr.Zero
+            ? System.Windows.Forms.Screen.PrimaryScreen
+            : System.Windows.Forms.Screen.FromHandle(handle);
         if (screen is null)
         {
             throw new InvalidOperationException("No active screen is available.");
