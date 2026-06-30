@@ -1,4 +1,5 @@
 using PersonalAssistant.Windows.Protocol;
+using Xunit;
 
 namespace PersonalAssistant.Windows.Tests;
 

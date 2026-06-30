@@ -62,6 +62,15 @@ dotnet test .\PersonalAssistant.Windows.sln
 
 The publish script creates a self-contained `win-x64` build under `publish\win-x64`.
 
+For normal use, double-click this from File Explorer:
+
+```text
+install-or-update.cmd
+```
+
+That wrapper runs tests, publishes the app, installs it under `%LocalAppData%\Programs\PersonalAssistant`,
+and pauses so you can read any error.
+
 ## Protocol summary
 
 The binary frame header is 16 bytes, big-endian:
