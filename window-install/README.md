@@ -69,7 +69,8 @@ install-or-update.cmd
 ```
 
 That wrapper runs tests, publishes the app, installs it under `%LocalAppData%\Programs\PersonalAssistant`,
-and pauses so you can read any error.
+creates a Start Menu shortcut named “Personal Assistant,” launches the app, and pauses so you can
+read any error.
 
 ## Protocol summary
 
