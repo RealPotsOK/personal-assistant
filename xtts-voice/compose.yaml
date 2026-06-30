@@ -1,0 +1,39 @@
+services:
+  xtts-api:
+    build:
+      context: .
+    image: xtts-voice-api:local
+    gpus: all
+    ipc: host
+    shm_size: "2gb"
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-11112}:11112"
+    env_file:
+      - /home/kevin/projects/personal-assistant/.env.ai-services
+    environment:
+      MODEL_PATH: /models/xtts-v2
+      MODEL_ID: ${MODEL_ID:-xtts-v2}
+      VOICE_DIR: /data/voices
+      DEVICE: cuda
+      MAX_TEXT_CHARS: ${MAX_TEXT_CHARS:-5000}
+      MAX_REFERENCE_BYTES: ${MAX_REFERENCE_BYTES:-20971520}
+      MIN_REFERENCE_SECONDS: ${MIN_REFERENCE_SECONDS:-3}
+      MAX_REFERENCE_SECONDS: ${MAX_REFERENCE_SECONDS:-30}
+      MAX_QUEUE: ${MAX_QUEUE:-8}
+      STREAM_CHUNK_SIZE: ${STREAM_CHUNK_SIZE:-20}
+      MAX_SEGMENT_CHARS: ${MAX_SEGMENT_CHARS:-240}
+    volumes:
+      - type: bind
+        source: ${MODEL_PATH_HOST:-/home/kevin/models/xtts-v2}
+        target: /models/xtts-v2
+        read_only: true
+      - xtts_voice_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  xtts_voice_data:

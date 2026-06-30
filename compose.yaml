@@ -1,0 +1,42 @@
+services:
+  controller:
+    build:
+      context: .
+    image: personal-assistant-controller:local
+    restart: unless-stopped
+    ports:
+      - "${CONTROLLER_PORT:-10112}:10112"
+    env_file:
+      - /home/kevin/projects/personal-assistant/.env.ai-services
+    environment:
+      QWEN_URL: ${QWEN_URL:-http://host.docker.internal:11111}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen3-vl-8b-instruct}
+      WHISPER_URL: ${WHISPER_URL:-ws://host.docker.internal:11113/ws/transcribe}
+      XTTS_URL: ${XTTS_URL:-ws://host.docker.internal:11112/ws/tts}
+      XTTS_HTTP_URL: ${XTTS_HTTP_URL:-http://host.docker.internal:11112}
+      DEFAULT_XTTS_VOICE_ID: ${DEFAULT_XTTS_VOICE_ID:-}
+      DATABASE_PATH: /data/personal-assistant.sqlite
+      MAX_BINARY_BYTES: ${MAX_BINARY_BYTES:-5242880}
+      MAX_SCREEN_BYTES: ${MAX_SCREEN_BYTES:-5242880}
+      MAX_SCREEN_PIXELS: ${MAX_SCREEN_PIXELS:-1048576}
+      SCREEN_FRESH_SECONDS: ${SCREEN_FRESH_SECONDS:-10}
+      SCREEN_WAIT_MS: ${SCREEN_WAIT_MS:-750}
+      MAX_PROFILE_TURNS: ${MAX_PROFILE_TURNS:-24}
+      MAX_PROFILE_MEMORIES: ${MAX_PROFILE_MEMORIES:-100}
+      MAX_SENTENCE_CHARS: ${MAX_SENTENCE_CHARS:-240}
+      MIN_XTTS_FREE_VRAM_BYTES: ${MIN_XTTS_FREE_VRAM_BYTES:-2147483648}
+      PAIRING_ENABLED: ${PAIRING_ENABLED:-true}
+      PAIRING_RATE_LIMIT_PER_MINUTE: ${PAIRING_RATE_LIMIT_PER_MINUTE:-5}
+      MAX_VOICE_REFERENCE_BYTES: ${MAX_VOICE_REFERENCE_BYTES:-20971520}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - controller_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  controller_data:

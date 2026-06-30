@@ -1,0 +1,7 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-multipart==0.0.20
+coqui-tts==0.27.5
+transformers>=4.57,<5
+safetensors==0.6.2
+numpy>=1.26,<3

@@ -1,0 +1,37 @@
+services:
+  whisper-api:
+    build:
+      context: .
+    image: whisper-small-api:local
+    gpus: all
+    ipc: host
+    shm_size: "1gb"
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-11113}:11113"
+    env_file:
+      - /home/kevin/projects/personal-assistant/.env.ai-services
+    environment:
+      MODEL_PATH: /models/whisper
+      WHISPER_MODEL_VARIANT: ${WHISPER_MODEL_VARIANT:-small.en}
+      MODEL_ID: ${MODEL_ID:-whisper-small.en}
+      DEVICE: cuda
+      COMPUTE_TYPE: ${COMPUTE_TYPE:-float16}
+      MAX_AUDIO_BYTES: ${MAX_AUDIO_BYTES:-104857600}
+      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-7200}
+      MAX_QUEUE: ${MAX_QUEUE:-4}
+      PARTIAL_INTERVAL_MS: ${PARTIAL_INTERVAL_MS:-800}
+      FINAL_SILENCE_MS: ${FINAL_SILENCE_MS:-700}
+      MAX_UTTERANCE_MS: ${MAX_UTTERANCE_MS:-28000}
+      OVERLAP_MS: ${OVERLAP_MS:-1000}
+    volumes:
+      - type: bind
+        source: ${WHISPER_MODEL_PATH_HOST:-/home/kevin/models/whisper/small.en}
+        target: /models/whisper
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true
+

@@ -1,0 +1,41 @@
+services:
+  qwen-api:
+    build:
+      context: .
+    image: qwen3-vl-api:local
+    gpus: all
+    ipc: host
+    shm_size: "2gb"
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-11111}:11111"
+    env_file:
+      - /home/kevin/projects/personal-assistant/.env.ai-services
+    environment:
+      MODEL_PATH: /models/qwen3-vl-8b-instruct
+      MODEL_ID: ${MODEL_ID:-qwen3-vl-8b-instruct}
+      QUANTIZATION: ${QUANTIZATION:-4bit}
+      ATTENTION_IMPLEMENTATION: ${ATTENTION_IMPLEMENTATION:-sdpa}
+      DEFAULT_MAX_TOKENS: ${DEFAULT_MAX_TOKENS:-512}
+      MAX_TOKENS: ${MAX_TOKENS:-2048}
+      MAX_IMAGES: ${MAX_IMAGES:-4}
+      MAX_IMAGE_BYTES: ${MAX_IMAGE_BYTES:-10485760}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-1048576}
+      MAX_WEB_PAGES: ${MAX_WEB_PAGES:-5}
+      MAX_WEB_DEPTH: ${MAX_WEB_DEPTH:-1}
+      MAX_WEB_PAGE_BYTES: ${MAX_WEB_PAGE_BYTES:-2097152}
+      MAX_WEB_CHARS_PER_PAGE: ${MAX_WEB_CHARS_PER_PAGE:-12000}
+      MAX_WEB_TOTAL_CHARS: ${MAX_WEB_TOTAL_CHARS:-40000}
+      FETCH_TIMEOUT_SECONDS: ${FETCH_TIMEOUT_SECONDS:-10}
+      CRAWL_TIMEOUT_SECONDS: ${CRAWL_TIMEOUT_SECONDS:-20}
+      MAX_REDIRECTS: ${MAX_REDIRECTS:-3}
+    volumes:
+      - type: bind
+        source: ${MODEL_PATH_HOST:-/home/kevin/models/qwen3-vl-8b-instruct}
+        target: /models/qwen3-vl-8b-instruct
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true

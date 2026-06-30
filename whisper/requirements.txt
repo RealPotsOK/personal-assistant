@@ -1,0 +1,9 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-multipart==0.0.20
+faster-whisper==1.2.1
+ctranslate2>=4.5,<5
+av>=14,<17
+numpy>=1.26,<3
+webrtcvad-wheels==2.0.14
+nvidia-ml-py==13.590.44
