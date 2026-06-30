@@ -38,6 +38,14 @@ class Settings:
     pairing_enabled: bool = os.getenv("PAIRING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     pairing_rate_limit_per_minute: int = _integer("PAIRING_RATE_LIMIT_PER_MINUTE", 5, 1)
     max_voice_reference_bytes: int = _integer("MAX_VOICE_REFERENCE_BYTES", 20 * 1024 * 1024, 1024)
+    conversation_log_enabled: bool = os.getenv("CONVERSATION_LOG_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    conversation_log_path: str = os.getenv("CONVERSATION_LOG_PATH", "/logs/conversation.log")
+    conversation_log_max_bytes: int = _integer("CONVERSATION_LOG_MAX_BYTES", 10 * 1024 * 1024, 1024)
 
     def validate(self) -> None:
         if len(self.ai_api_key) < 16:

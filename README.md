@@ -33,6 +33,50 @@ curl http://localhost:10112/health
 `/live` reports controller process health. `/health` reports Qwen, Whisper, and XTTS status. Qwen
 and Whisper are required for full readiness; unavailable XTTS produces a text-only session.
 
+## Getting the assistant's attention
+
+The v1 Windows companion has no wake word yet. Once the tray app is connected and unmuted, it is
+always listening through Whisper. Speak naturally, then pause; after Whisper finalizes your utterance
+the controller sends it to Qwen. While Qwen/XTTS is thinking or speaking, talking again triggers
+barge-in and cancels the old turn.
+
+For visual questions, say something like “what is this on my screen?” or use the tray menu’s
+“Send Screen Context” action. The controller will request one fresh screenshot only when it needs
+screen context.
+
+## Conversation debug log
+
+The controller writes a local JSONL debug log for final Whisper transcripts, completed Qwen answers,
+interruptions, TTS fallback notices, and turn errors. It never logs raw audio or screenshot bytes.
+
+Default host path:
+
+```text
+/home/kevin/projects/personal-assistant/logs/conversation.log
+```
+
+Watch it live:
+
+```bash
+cd /home/kevin/projects/personal-assistant
+tail -f logs/conversation.log
+```
+
+Each line is JSON, for example:
+
+```json
+{"ts":"2026-06-30T18:00:00+00:00","event":"whisper.final","profile_id":"...","text":"what time is it"}
+{"ts":"2026-06-30T18:00:02+00:00","event":"qwen.completed","profile_id":"...","turn_id":"...","transcript":"what time is it","response":"..."}
+```
+
+Disable it or change its location with:
+
+```dotenv
+CONVERSATION_LOG_ENABLED=false
+CONVERSATION_LOG_PATH=/logs/conversation.log
+CONVERSATION_LOG_MAX_BYTES=10485760
+```
+
 ## Windows client pairing
 
 The normal PC setup flow is:

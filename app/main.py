@@ -26,6 +26,7 @@ from app.auth import AuthContext, authenticate_bearer, bearer_token
 from app.clients import QwenClient, ServiceHealth
 from app.config import Settings, load_settings
 from app.database import Database
+from app.debug_log import ConversationLog
 from app.protocol import ProtocolError
 from app.screen import ScreenError
 from app.session import AssistantSession, SessionRegistry
@@ -70,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     qwen = QwenClient(config)
     health = ServiceHealth(config, qwen)
+    conversation_log = ConversationLog(config)
     registry = SessionRegistry()
     pair_attempts: dict[str, deque[float]] = defaultdict(deque)
 
@@ -111,6 +113,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "active_session": registry.active,
                 "paired_devices": database.device_count(),
                 "pairing_enabled": config.pairing_enabled,
+                "conversation_log": {
+                    "enabled": config.conversation_log_enabled,
+                    "path": config.conversation_log_path,
+                },
                 "services": services,
             },
             status_code=200 if core_ready else 503,
@@ -222,7 +228,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return
         try:
             start = await websocket.receive_json()
-            controller = AssistantSession(websocket, config, database, qwen, health, auth.profile_id)
+            controller = AssistantSession(
+                websocket,
+                config,
+                database,
+                qwen,
+                health,
+                conversation_log,
+                auth.profile_id,
+            )
             await controller.run(start)
         except WebSocketDisconnect:
             pass

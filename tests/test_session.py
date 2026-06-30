@@ -33,6 +33,7 @@ def make_session(tmp_path):
         ai_api_key="test-internal-ai-key-that-is-long-enough",
         client_token="test-pc-client-token-that-is-long-enough",
         database_path=str(tmp_path / "session.sqlite"),
+        conversation_log_path=str(tmp_path / "conversation.log"),
     )
     database = Database(config.database_path)
     socket = FakeWebSocket()

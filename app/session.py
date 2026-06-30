@@ -15,6 +15,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.clients import QwenClient, ServiceHealth, UpstreamError
 from app.config import Settings
 from app.database import Database
+from app.debug_log import ConversationLog
 from app.protocol import PayloadKind, ProtocolError, SequenceTracker, decode_frame, encode_frame
 from app.screen import ScreenError, ScreenFrame, normalize_screen
 from app.text import SentenceChunker, needs_screen
@@ -66,6 +67,7 @@ class AssistantSession:
         database: Database,
         qwen: QwenClient,
         health: ServiceHealth,
+        conversation_log: ConversationLog | None = None,
         allowed_profile_id: str | None = None,
     ) -> None:
         self.websocket = websocket
@@ -73,6 +75,7 @@ class AssistantSession:
         self.database = database
         self.qwen = qwen
         self.health = health
+        self.conversation_log = conversation_log or ConversationLog(settings)
         self.allowed_profile_id = allowed_profile_id
         self.send_lock = asyncio.Lock()
         self.whisper = None
@@ -124,6 +127,13 @@ class AssistantSession:
     async def run(self, start: dict) -> None:
         self._configure_start(start)
         self.database.ensure_profile(self.profile_id)
+        await self.conversation_log.write(
+            "session.started",
+            profile_id=self.profile_id,
+            thinking=self.thinking,
+            language=self.language,
+            tts_configured=bool(self.voice_id),
+        )
         await self._connect_whisper()
         await self.send_json(
             {
@@ -300,8 +310,18 @@ class AssistantSession:
                     text = str(event.get("text", "")).strip()
                     await self.send_json({"type": "transcript.final", "text": text})
                     if text:
+                        await self.conversation_log.write(
+                            "whisper.final",
+                            profile_id=self.profile_id,
+                            text=text,
+                        )
                         await self._start_turn(text)
                 elif kind == "error":
+                    await self.conversation_log.write(
+                        "whisper.error",
+                        profile_id=self.profile_id,
+                        message=str(event.get("message", ""))[:500],
+                    )
                     await self.send_json(
                         {"type": "error", "code": "whisper_error", "message": event.get("message")}
                     )
@@ -433,6 +453,13 @@ class AssistantSession:
                 return
             if text:
                 self.database.add_turn(self.profile_id, transcript, text)
+                await self.conversation_log.write(
+                    "qwen.completed",
+                    profile_id=self.profile_id,
+                    turn_id=turn_id,
+                    transcript=transcript,
+                    response=text,
+                )
                 task = asyncio.create_task(self._extract_memories(transcript, text))
                 self.background.add(task)
                 task.add_done_callback(self.background.discard)
@@ -449,6 +476,13 @@ class AssistantSession:
                 tts_task.cancel()
                 await asyncio.gather(tts_task, return_exceptions=True)
             logger.warning("Turn failed: %s", type(error).__name__)
+            await self.conversation_log.write(
+                "turn.failed",
+                profile_id=self.profile_id,
+                turn_id=turn_id,
+                transcript=transcript,
+                error=str(error)[:500],
+            )
             if turn_id == self.current_turn_id and not cancel.is_set():
                 await self.send_json(
                     {
@@ -564,6 +598,12 @@ class AssistantSession:
 
     async def _tts_unavailable(self, turn_id: str, message: str) -> None:
         if turn_id == self.current_turn_id and not self.cancel_event.is_set():
+            await self.conversation_log.write(
+                "tts.unavailable",
+                profile_id=self.profile_id,
+                turn_id=turn_id,
+                message=message,
+            )
             await self.send_json(
                 {"type": "error", "code": "tts_unavailable", "message": message, "turn_id": turn_id}
             )
@@ -609,6 +649,12 @@ class AssistantSession:
             return
         turn_id = self.current_turn_id
         self.cancel_event.set()
+        await self.conversation_log.write(
+            "turn.interrupted",
+            profile_id=self.profile_id,
+            turn_id=turn_id,
+            reason=reason,
+        )
         await self.send_json({"type": "playback.cancel", "turn_id": turn_id, "reason": reason})
         self.turn_task.cancel()
         await asyncio.gather(self.turn_task, return_exceptions=True)
@@ -626,3 +672,5 @@ class AssistantSession:
         if self.whisper:
             with contextlib.suppress(Exception):
                 await self.whisper.close()
+        if self.profile_id:
+            await self.conversation_log.write("session.closed", profile_id=self.profile_id)

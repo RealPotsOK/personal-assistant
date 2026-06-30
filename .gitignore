@@ -16,6 +16,7 @@ codex
 *.user
 *.suo
 *.log
+logs/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
