@@ -28,7 +28,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildMenu(),
         };
-        _tray.DoubleClick += (_, _) => OpenSettings();
+        _tray.DoubleClick += async (_, _) => await OpenSettingsAsync();
         Application.ApplicationExit += (_, _) => Cleanup();
         _ = StartAsync();
     }
@@ -42,7 +42,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_muteItem);
         menu.Items.Add("Send Screen Context", null, async (_, _) => await SendScreenAsync(true));
         menu.Items.Add("Upload / Replace Voice...", null, async (_, _) => await UploadVoiceAsync());
-        menu.Items.Add("Settings", null, (_, _) => OpenSettings());
+        menu.Items.Add("Settings", null, async (_, _) => await OpenSettingsAsync());
         menu.Items.Add("Reset Pairing", null, (_, _) => ResetPairing());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
         RefreshMenuLabels();
@@ -199,7 +199,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void OpenSettings()
+    private async Task OpenSettingsAsync()
     {
         if (_config is null)
         {
@@ -210,6 +210,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (settings.ShowDialog() == DialogResult.OK)
         {
             _store.Save(_config);
+            if (_session?.IsConnected == true)
+            {
+                await ConnectAsync();
+            }
         }
     }
 
