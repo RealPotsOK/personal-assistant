@@ -3,8 +3,10 @@ import time
 
 from app.config import Settings
 from app.database import Database
+from app.protocol import PayloadKind, encode_frame
 from app.screen import ScreenFrame
 from app.session import AssistantSession
+from app.vad import FRAME_BYTES
 
 
 class FakeWebSocket:
@@ -26,6 +28,19 @@ class FakeHealth:
 
 class FakeQwen:
     pass
+
+
+class FakeVad:
+    def is_speech(self, frame, _rate):
+        return any(frame)
+
+
+class FakeWhisper:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, payload):
+        self.sent.append(payload)
 
 
 def make_session(tmp_path):
@@ -79,6 +94,32 @@ async def test_interrupt_cancels_active_turn_and_marks_playback(tmp_path):
         "reason": "barge_in",
     }
     assert socket.json[-1]["state"] == "listening"
+    database.close()
+
+
+async def test_barge_in_uses_grace_period_before_interrupting(tmp_path):
+    session, socket, database = make_session(tmp_path)
+    session.profile_id = "pc"
+    session.current_turn_id = "turn-1"
+    session.avatar_state = "thinking"
+    session.turn_task = asyncio.create_task(asyncio.sleep(30))
+    session.whisper = FakeWhisper()
+    session.vad.vad = FakeVad()
+    voice = b"\x01\x00" * (FRAME_BYTES // 2)
+
+    session.barge_in_armed_at = time.monotonic() + 10
+    await session._handle_binary(
+        encode_frame(PayloadKind.MIC_PCM16, voice * 20, sequence=1, timestamp_ms=1)
+    )
+    assert not session.cancel_event.is_set()
+    assert not any(event.get("type") == "playback.cancel" for event in socket.json)
+
+    session.barge_in_armed_at = 0
+    await session._handle_binary(
+        encode_frame(PayloadKind.MIC_PCM16, voice * 20, sequence=2, timestamp_ms=2)
+    )
+    assert session.cancel_event.is_set()
+    assert any(event.get("reason") == "barge_in" for event in socket.json)
     database.close()
 
 

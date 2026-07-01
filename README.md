@@ -40,6 +40,11 @@ always listening through Whisper. Speak naturally, then pause; after Whisper fin
 the controller sends it to Qwen. While Qwen/XTTS is thinking or speaking, talking again triggers
 barge-in and cancels the old turn.
 
+Barge-in intentionally waits briefly after Whisper finalizes your phrase so leftover mic audio does
+not cancel the answer before it starts. The defaults require sustained speech-like audio after that
+grace period. If your room is still too noisy, increase `BARGE_IN_GRACE_SECONDS` or
+`BARGE_IN_TRIGGER_FRAMES`; if interruptions feel sluggish, lower them slightly.
+
 For visual questions, say something like “what is this on my screen?” or use the tray menu’s
 “Send Screen Context” action. The controller will request one fresh screenshot only when it needs
 screen context.

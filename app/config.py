@@ -66,12 +66,21 @@ class Settings:
         "STT_SUPPRESSED_FINALS",
         "thank you.|thank you|thanks for watching.|thanks for watching|you.|you",
     )
+    barge_in_grace_seconds: float = _float("BARGE_IN_GRACE_SECONDS", 1.2, 0)
+    barge_in_vad_mode: int = _integer("BARGE_IN_VAD_MODE", 3, 0)
+    barge_in_window_frames: int = _integer("BARGE_IN_WINDOW_FRAMES", 12, 1)
+    barge_in_trigger_frames: int = _integer("BARGE_IN_TRIGGER_FRAMES", 10, 1)
+    barge_in_reset_silence_frames: int = _integer("BARGE_IN_RESET_SILENCE_FRAMES", 25, 1)
 
     def validate(self) -> None:
         if len(self.ai_api_key) < 16:
             raise ValueError("AI_API_KEY is required and must be at least 16 characters")
         if len(self.client_token) < 16:
             raise ValueError("PA_CLIENT_TOKEN is required and must be at least 16 characters")
+        if self.barge_in_vad_mode > 3:
+            raise ValueError("BARGE_IN_VAD_MODE must be between 0 and 3")
+        if self.barge_in_trigger_frames > self.barge_in_window_frames:
+            raise ValueError("BARGE_IN_TRIGGER_FRAMES cannot exceed BARGE_IN_WINDOW_FRAMES")
 
 
 def load_settings() -> Settings:

@@ -92,7 +92,13 @@ class AssistantSession:
         self.sequence = SequenceTracker()
         self.out_sequence = 0
         self.started = time.monotonic()
-        self.vad = BargeInDetector()
+        self.vad = BargeInDetector(
+            vad_mode=settings.barge_in_vad_mode,
+            window_frames=settings.barge_in_window_frames,
+            trigger_frames=settings.barge_in_trigger_frames,
+            reset_silence_frames=settings.barge_in_reset_silence_frames,
+        )
+        self.barge_in_armed_at = 0.0
         self.latest_screen: ScreenFrame | None = None
         self.screen_metadata: dict[int, ScreenMetadata] = {}
         self.screen_event = asyncio.Event()
@@ -218,9 +224,11 @@ class AssistantSession:
                 raise ProtocolError("microphone frame must contain 1-65536 bytes")
             if len(frame.payload) % 2:
                 raise ProtocolError("microphone PCM must contain complete 16-bit samples")
-            if self.vad.feed(
-                frame.payload, armed=self.avatar_state in {"thinking", "speaking"}
-            ):
+            barge_in_armed = (
+                self.avatar_state in {"thinking", "speaking"}
+                and time.monotonic() >= self.barge_in_armed_at
+            )
+            if self.vad.feed(frame.payload, armed=barge_in_armed):
                 await self.interrupt("barge_in")
             async with self.whisper_send_lock:
                 await self.whisper.send(frame.payload)
@@ -373,6 +381,8 @@ class AssistantSession:
         self.cancel_event = asyncio.Event()
         turn_id = uuid.uuid4().hex
         self.current_turn_id = turn_id
+        self.barge_in_armed_at = time.monotonic() + self.settings.barge_in_grace_seconds
+        self.vad.reset()
         self.turn_task = asyncio.create_task(self._run_turn(turn_id, transcript, self.cancel_event))
 
     async def _screen_for_turn(self, transcript: str, turn_id: str) -> ScreenFrame | None:
@@ -692,6 +702,7 @@ class AssistantSession:
         self.turn_task.cancel()
         await asyncio.gather(self.turn_task, return_exceptions=True)
         self.current_turn_id = None
+        self.vad.reset()
         await self.set_avatar("listening")
 
     async def close(self) -> None:
